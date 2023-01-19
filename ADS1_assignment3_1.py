@@ -1,12 +1,11 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-# import seaborn as sb
-# from scipy.stats import skew
+import scipy.optimize as opt
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
-
-
+import errors as err
+from sklearn.linear_model import LinearRegression
 def reader(file):
     '''
     It is defined to pass on the file name of the data frame, then later read
@@ -114,7 +113,7 @@ def data_clean(df):
 def data_preprocess2(df, value):
     '''
     Cluster preprocessing for Clustering the Countries over desired indicators
-    from 1990-1991 is carried out in this function. This function is called
+    from 1990-2021 is carried out in this function. This function is called
     in for loop with range of values .i.e. Country Code. For each country
     Average of each attribute in said period is year is returned.
     Parameters
@@ -216,6 +215,15 @@ def norm_func(i):
     '''
     x = (i-i.min()) / (i.max() - i.min())
     return (x)
+
+
+
+
+
+def exp_growth(t, scale, growth):
+    
+    f = scale * np.exp(growth * (t-1990))
+    return f
 
 
 # Passing the World Bank Data name as the arguements to reader function
@@ -373,12 +381,12 @@ plt.text(79.8394, 1.36922, 'USA')
 plt.text(68.048, 3.32804, 'Ukraine')
 plt.text(16.6743, 0.19849, 'Ethiopia')
 plt.text(60.1858, 0.1, 'North Korea')
-plt.text(45.9445, 0.633247, 'Indonesia')
-plt.text(42.9002, 0.700353, 'Egypt')
+plt.text(47.9445, 0.633247, 'Indonesia')
+plt.text(42.9002, 0.800353, 'Egypt')
 plt.text(82.5578, 0.499354, 'UAE')
 plt.text(73.7153, 1.64017, 'Russia')
 plt.text(69.2768, 1.23132, 'Iraq')
-plt.text(82.436, 0.244667, 'Brazil')
+plt.text(75.436, 0.24667, 'Brazil')
 plt.text(61.4458, 0.530556, 'Congo')
 plt.text(22.2864, 0.204081, 'Kenya')
 plt.text(83.1505, 0.27963, 'Finland')
@@ -428,5 +436,112 @@ nuclear = nuclear[nuclear['Country Code'].isin(countries) ==
                   True].reset_index().drop(['index'], axis=1)
 nuclear = nuclear.dropna(axis=1)
 nuclear = nuclear.drop(columns=['Country Code', 'Indicator Name',
-                            'Indicator Code'], axis=1)
+                                'Indicator Code'], axis=1)
 print(nuclear)
+nuclear_t = nuclear.T
+
+clear_t = nuclear_t.rename_axis(None, axis=1)
+nuclear_t = nuclear_t.reset_index()
+header = nuclear_t.iloc[0]
+nuclear_t = nuclear_t.iloc[1:]
+nuclear_t.columns = header
+nuclear_t.rename(columns={'Country Name': 'Year'}, inplace=True)
+print(nuclear_t)
+
+nu_new = pd.DataFrame()
+years = []
+years = ['1990', '1995', '2000', '2005', '2010', '2014']
+nu_new = nuclear_t.loc[nuclear_t['Year'].isin(years)].reset_index().drop(
+    ['index'], axis=1)
+
+print(nu_new)
+
+plt.figure(figsize=(10, 8))
+
+x_axis = np.arange(len(nu_new['Year']))
+
+plt.bar(x_axis - 0.15, nu_new['Russian Federation'], width=0.1, label='Russia')
+plt.bar(x_axis + 0.0, nu_new['Ukraine'], width=0.1, label='Ukraine')
+plt.bar(x_axis + 0.15, nu_new['United States'],
+        width=0.1, label='United States')
+
+plt.title('Nuclear energy Harnessing of US,Ukraine & Russia')
+plt.xlabel('Years')
+plt.ylabel('Nuclear Energy harnessing in % of total')
+plt.legend()
+plt.xticks(x_axis, nu_new['Year'])
+plt.show()
+
+# For Curve fitting & error range
+
+ukraine= nuclear_t.drop(columns=['Russian Federation','United States'],axis=1)
+print(ukraine)
+ukraine=ukraine.to_numpy()
+x = ukraine[:,0].astype(int)  # Storing Independent feature Rainfall to x
+y =ukraine[:,1] # Stroing dependent feature Productivity to y
+
+print(x)
+# Plotting the data as two dimensional scatter plot
+
+plt.figure(dpi=144, figsize=(15,8))
+plt.scatter(x, y)
+plt.xlabel('Year')
+plt.ylabel('Nuclear Energy Harnessing(% of Total)')
+plt.title('Nuclear Energy harnessing for Ukraine 1990-2014')
+
+popt, covar = opt.curve_fit(exp_growth, x,y, p0=[20, 0.016])
+
+print("Fit parameter", popt)
+z = exp_growth(x, *popt)
+plt.figure(figsize=(15,8))
+plt.plot(x, y, label="data")
+plt.plot(x, z, label="fit")
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("population")
+plt.title("Final fit exponential growth")
+plt.show()
+print()
+
+#extract the sigmas from the diagonal of the covariance matrix
+sigma = np.sqrt(np.diag(covar))
+print(sigma)
+low, up = err.err_ranges(x, exp_growth, popt, sigma)
+plt.figure(figsize=(18,5))
+plt.title("Exponential Fit")
+plt.plot(x, y, label="data")
+plt.plot(x, z, label="fit")
+plt.fill_between(x, low, up, alpha=0.7)
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("Nuclear Energy Harnessing")
+plt.show()
+
+
+#Predicting the Nuclear Energy Harnessing by 2023
+
+print("Forcasted population")
+low, up = err.err_ranges(2023, exp_growth, popt, sigma)
+print('The Predicted value for Nuclear Harnessing by Ukraine in 2023\
+      will be between',low,'&',up)
+
+#Plotting the prediction
+x_new=x.astype(int)
+x_new = np.append(x_new,[2016,2017,2018,2019,2020,2021,2022,2023])
+z_new = exp_growth(x_new, *popt)
+low, up = err.err_ranges(x_new, exp_growth, popt, sigma)
+plt.figure(figsize=(20,7))
+plt.title("Predicted Values for Ukraine's Nuclear Energy Harnessing in 2023")
+plt.plot(x, y, label="data")
+plt.plot(x_new, z_new, label="fit")
+plt.fill_between(x_new, low, up, alpha=0.7)
+plt.plot(2023,51.421, marker='o')
+plt.plot(2023,68.607, marker='o')
+plt.text(2023,51.421, 'lower limit = 51.42%')
+plt.text(2023,68.607, 'Upper Limit = 68.60%')
+plt.legend()
+plt.xlabel("year")
+plt.ylabel("Nuclear Energy Harnessing % of Total")
+plt.show()
+
+
